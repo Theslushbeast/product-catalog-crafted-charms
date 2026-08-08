@@ -1,13 +1,20 @@
 <template>
   <div class="product-card">
     <div class="image-wrapper">
-      <img :src="product.imageUrl" :alt="product.name" class="product-image" />
+      <img :src="product.image_url" :alt="product.name" class="product-image" />
     </div>
     <div class="product-info">
       <h3 class="product-title">{{ product.name }}</h3>
       <p class="product-description">{{ product.description }}</p>
-      <div v-if="product.price !== undefined" class="product-price">
-        ₱{{ product.price.toFixed(2) }}
+      
+      <div class="card-footer">
+        <div v-if="product.price !== undefined" class="product-price">
+          ₱{{ Number(product.price).toFixed(2) }}
+        </div>
+        <div v-if="isAdmin" class="admin-actions">
+          <button @click="$emit('edit', product)" class="btn-icon" title="Edit">✏️</button>
+          <button @click="$emit('delete', product.id)" class="btn-icon danger" title="Delete">🗑️</button>
+        </div>
       </div>
     </div>
   </div>
@@ -18,6 +25,12 @@ import type { Product } from '../types'
 
 defineProps<{
   product: Product
+  isAdmin: boolean
+}>()
+
+defineEmits<{
+  (e: 'edit', product: Product): void
+  (e: 'delete', id: string): void
 }>()
 </script>
 
@@ -73,10 +86,35 @@ defineProps<{
   flex-grow: 1;
 }
 
+.card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+}
+
 .product-price {
   font-size: 1.1rem;
   font-weight: 700;
   color: #c86d51;
-  align-self: flex-start;
+}
+
+.admin-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-icon {
+  background: #f7f2ee;
+  border: 1px solid #e8ded6;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.btn-icon.danger:hover {
+  background: #ffebee;
+  border-color: #ffcdd2;
 }
 </style>
