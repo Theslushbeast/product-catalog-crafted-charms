@@ -84,13 +84,17 @@
           <label>Price (₱)</label>
           <input type="number" step="0.01" v-model.number="productForm.price" placeholder="150.00" />
 
-          <label>Image URL</label>
-          <input type="url" v-model="productForm.image_url" required placeholder="https://..." />
+          <!-- File Upload Input -->
+          <label>Upload Image File</label>
+          <input type="file" @change="handleFileChange" accept="image/*" />
+
+          <label>OR Image URL</label>
+          <input type="url" v-model="productForm.image_url" placeholder="https://..." :required="!selectedFile && !productForm.image_url" />
 
           <div class="modal-actions">
             <button type="button" @click="showProductModal = false" class="btn-secondary">Cancel</button>
             <button type="submit" class="btn-primary" :disabled="savingProduct">
-              {{ savingProduct ? 'Saving...' : 'Save Product' }}
+              {{ savingProduct ? 'Uploading & Saving...' : 'Save Product' }}
             </button>
           </div>
         </form>
@@ -191,38 +195,6 @@ function openEditModal(product: Product) {
   showProductModal.value = true
 }
 
-async function handleProductSubmit() {
-  savingProduct.value = true
-  
-  if (editingProduct.value) {
-    const { error } = await supabase
-      .from('crafted_charm_products')
-      .update({
-        name: productForm.value.name,
-        description: productForm.value.description,
-        price: productForm.value.price,
-        image_url: productForm.value.image_url
-      })
-      .eq('id', editingProduct.value.id)
-
-    if (!error) await fetchProducts()
-  } else {
-    const { error } = await supabase
-      .from('crafted_charm_products')
-      .insert([{
-        name: productForm.value.name,
-        description: productForm.value.description,
-        price: productForm.value.price,
-        image_url: productForm.value.image_url
-      }])
-
-    if (!error) await fetchProducts()
-  }
-
-  savingProduct.value = false
-  showProductModal.value = false
-}
-
 async function handleDeleteProduct(id: string) {
   if (confirm('Are you sure you want to delete this product?')) {
     const { error } = await supabase
@@ -231,6 +203,78 @@ async function handleDeleteProduct(id: string) {
       .eq('id', id)
 
     if (!error) await fetchProducts()
+  }
+}
+const selectedFile = ref<File | null>(null)
+
+function handleFileChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  if (target.files && target.files[0]) {
+    selectedFile.value = target.files[0]
+  }
+}
+
+// Upload file to Supabase Storage bucket and return its public URL
+async function uploadProductImage(file: File): Promise<string> {
+  const fileExt = file.name.split('.').pop()
+  const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+  const filePath = `products/${fileName}`
+
+  const { error: uploadError } = await supabase.storage
+    .from('product-images')
+    .upload(filePath, file)
+
+  if (uploadError) throw uploadError
+
+  const { data } = supabase.storage
+    .from('product-images')
+    .getPublicUrl(filePath)
+
+  return data.publicUrl
+}
+
+async function handleProductSubmit() {
+  savingProduct.value = true
+
+  try {
+    let imageUrl = productForm.value.image_url
+
+    // If user uploaded a new image file, store it in Supabase Storage first
+    if (selectedFile.value) {
+      imageUrl = await uploadProductImage(selectedFile.value)
+    }
+
+    if (editingProduct.value) {
+      const { error } = await supabase
+        .from('crafted_charm_products')
+        .update({
+          name: productForm.value.name,
+          description: productForm.value.description,
+          price: productForm.value.price,
+          image_url: imageUrl
+        })
+        .eq('id', editingProduct.value.id)
+
+      if (!error) await fetchProducts()
+    } else {
+      const { error } = await supabase
+        .from('crafted_charm_products')
+        .insert([{
+          name: productForm.value.name,
+          description: productForm.value.description,
+          price: productForm.value.price,
+          image_url: imageUrl
+        }])
+
+      if (!error) await fetchProducts()
+    }
+
+    selectedFile.value = null
+    showProductModal.value = false
+  } catch (err) {
+    alert('Failed to save product or upload image.')
+  } finally {
+    savingProduct.value = false
   }
 }
 </script>
